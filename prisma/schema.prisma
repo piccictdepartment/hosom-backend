@@ -9,10 +9,25 @@ datasource db {
   provider = "mysql"
 }
 
+enum Role {
+  STUDENT
+  LECTURER
+  SECRETARIAT
+  ADMINISTRATION
+  FINANCE
+  HEAD_OF_PROGRAMS
+  DIRECTOR_CHANCELLOR
+  ICT_MEDIA
+  SYSTEM_ADMINISTRATOR
+  ADMIN
+}
+
 model User {
-  id        String   @id @default(uuid()) @db.VarChar(36)
-  name      String   @db.VarChar(100)
-  email     String   @unique @db.VarChar(254)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String    @id @default(uuid()) @db.VarChar(36)
+  name         String    @db.VarChar(100)
+  email        String    @unique @db.VarChar(254)
+  passwordHash String    @db.VarChar(255)
+  role         Role      @default(STUDENT)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }

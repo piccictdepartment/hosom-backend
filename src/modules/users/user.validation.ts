@@ -1,8 +1,22 @@
 import { z } from "zod";
 
+export const roleEnum = [
+  "STUDENT",
+  "LECTURER",
+  "SECRETARIAT",
+  "ADMINISTRATION",
+  "FINANCE",
+  "HEAD_OF_PROGRAMS",
+  "DIRECTOR_CHANCELLOR",
+  "ICT_MEDIA",
+  "SYSTEM_ADMINISTRATOR",
+  "ADMIN",
+] as const;
+
 const userBody = z.object({
   name: z.string().trim().min(1).max(100),
   email: z.string().trim().toLowerCase().pipe(z.email().max(254)),
+  role: z.enum(roleEnum).optional(),
 }).strict();
 
 const userParams = z.object({ id: z.uuid() });

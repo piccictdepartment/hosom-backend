@@ -49,15 +49,16 @@ after(async () => {
 
 test("creates, lists, reads, updates and deletes a persisted user", async () => {
   const created = await request(app).post("/api/users")
-    .send({ name: " Alice ", email: " ALICE@EXAMPLE.COM " }).expect(201);
+    .send({ firstName: " Alice ", surname: " Smith ", email: " ALICE@EXAMPLE.COM " }).expect(201);
   const id = created.body.data.id;
   assert.equal(created.body.success, true);
-  assert.equal(created.body.data.name, "Alice");
+  assert.equal(created.body.data.firstName, "Alice");
+  assert.equal(created.body.data.surname, "Smith");
   assert.equal(created.body.data.email, "alice@example.com");
   assert.equal(created.headers.location, `/api/users/${id}`);
   assert.ok(created.body.data.createdAt);
   assert.ok(created.body.data.updatedAt);
-  assert.equal((await prisma.user.findUniqueOrThrow({ where: { id } })).name, "Alice");
+  assert.equal((await prisma.user.findUniqueOrThrow({ where: { id } })).firstName, "Alice");
 
   const listed = await request(app).get("/api/users").expect(200);
   assert.equal(listed.body.data[0].id, id);
@@ -65,8 +66,8 @@ test("creates, lists, reads, updates and deletes a persisted user", async () => 
 
   const fetched = await request(app).get(`/api/users/${id}`).expect(200);
   assert.equal(fetched.body.data.id, id);
-  const updated = await request(app).patch(`/api/users/${id}`).send({ name: "Alice Smith" }).expect(200);
-  assert.equal(updated.body.data.name, "Alice Smith");
+  const updated = await request(app).patch(`/api/users/${id}`).send({ firstName: "Alice Updated" }).expect(200);
+  assert.equal(updated.body.data.firstName, "Alice Updated");
   assert.equal(updated.body.data.email, "alice@example.com");
   const deleted = await request(app).delete(`/api/users/${id}`).expect(204);
   assert.equal(deleted.text, "");
@@ -76,7 +77,7 @@ test("creates, lists, reads, updates and deletes a persisted user", async () => 
 
 test("validates and bounds pagination with stable, non-overlapping pages", async () => {
   for (let index = 0; index < 3; index += 1) {
-    await request(app).post("/api/users").send({ name: `User ${index}`, email: `user${index}@example.com` }).expect(201);
+    await request(app).post("/api/users").send({ firstName: `User`, surname: `${index}`, email: `user${index}@example.com` }).expect(201);
   }
   const first = await request(app).get("/api/users?page=1&limit=2").expect(200);
   const second = await request(app).get("/api/users?page=2&limit=2").expect(200);
@@ -92,9 +93,9 @@ test("validates and bounds pagination with stable, non-overlapping pages", async
 
 test("rejects invalid bodies, unknown fields, empty patches and invalid IDs", async () => {
   for (const body of [
-    {}, { name: " ", email: "alice@example.com" }, { name: "Alice", email: "invalid" },
-    { name: "Alice", email: "alice@example.com", role: "admin" },
-    { name: "A".repeat(101), email: "alice@example.com" },
+    {}, { firstName: " ", surname: "Smith", email: "alice@example.com" }, { firstName: "Alice", surname: "Smith", email: "invalid" },
+    { firstName: "Alice", surname: "Smith", email: "alice@example.com", role: "admin" },
+    { firstName: "A".repeat(101), surname: "Smith", email: "alice@example.com" },
   ]) {
     const response = await request(app).post("/api/users").send(body).expect(400);
     assert.equal(response.body.error.code, "VALIDATION_ERROR");
@@ -110,7 +111,7 @@ test("returns 404 for missing users on read, update and delete", async () => {
   const path = `/api/users/${randomUUID()}`;
   for (const response of [
     await request(app).get(path).expect(404),
-    await request(app).patch(path).send({ name: "Missing" }).expect(404),
+    await request(app).patch(path).send({ firstName: "Missing" }).expect(404),
     await request(app).delete(path).expect(404),
   ]) {
     assert.equal(response.body.error.code, "USER_NOT_FOUND");
@@ -119,21 +120,21 @@ test("returns 404 for missing users on read, update and delete", async () => {
 
 test("enforces normalized email uniqueness, including concurrent creates and updates", async () => {
   const responses = await Promise.all([
-    request(app).post("/api/users").send({ name: "Alice", email: "ALICE@example.com" }),
-    request(app).post("/api/users").send({ name: "Alice", email: "alice@example.com" }),
+    request(app).post("/api/users").send({ firstName: "Alice", surname: "Smith", email: "ALICE@example.com" }),
+    request(app).post("/api/users").send({ firstName: "Alice", surname: "Smith", email: "alice@example.com" }),
   ]);
   assert.deepEqual(responses.map((response) => response.status).sort(), [201, 409]);
   assert.equal(responses.find((response) => response.status === 409)?.body.error.code, "CONFLICT");
-  const bob = await request(app).post("/api/users").send({ name: "Bob", email: "bob@example.com" }).expect(201);
+  const bob = await request(app).post("/api/users").send({ firstName: "Bob", surname: "Jones", email: "bob@example.com" }).expect(201);
   await request(app).patch(`/api/users/${bob.body.data.id}`).send({ email: " Alice@Example.com " }).expect(409);
   const unchanged = await prisma.user.findUniqueOrThrow({ where: { id: bob.body.data.id } });
   assert.equal(unchanged.email, "bob@example.com");
 });
 
 test("returns JSON errors for invalid JSON, oversized bodies, bad URLs and unknown routes", async () => {
-  const invalid = await request(app).post("/api/users").set("Content-Type", "application/json").send('{"name":').expect(400);
+  const invalid = await request(app).post("/api/users").set("Content-Type", "application/json").send('{"firstName":').expect(400);
   assert.equal(invalid.body.error.code, "INVALID_JSON");
-  const oversized = await request(app).post("/api/users").send({ name: "a".repeat(110000) }).expect(413);
+  const oversized = await request(app).post("/api/users").send({ firstName: "a".repeat(110000), surname: "b" }).expect(413);
   assert.equal(oversized.body.error.code, "PAYLOAD_TOO_LARGE");
   await request(app).get("/api/users/%E0%A4%A").expect(400);
   const missing = await request(app).get("/api/unknown").expect(404);

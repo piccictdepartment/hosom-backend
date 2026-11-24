@@ -1,14 +1,32 @@
 import { prisma } from "../../config/database.js";
 import type { CreateUserInput, ListUsersInput, UpdateUserInput } from "./user.types.js";
 
-// Fields safe to expose — never includes passwordHash or refreshToken
+// Fields safe to expose — never includes passwordHash
 export const safeUserSelect = {
   id: true,
-  name: true,
+  firstName: true,
+  middleName: true,
+  surname: true,
   email: true,
+  phone: true,
   role: true,
+  loggedInAt: true,
   createdAt: true,
   updatedAt: true,
+  student: {
+    select: {
+      id: true,
+      studentNumber: true,
+      gender: true,
+      dateOfBirth: true,
+      address: true,
+      guardianName: true,
+      guardianPhone: true,
+      program: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  },
 } as const;
 
 export const userRepository = {
@@ -38,11 +56,24 @@ export const userRepository = {
   },
 
   findByEmailWithCredentials(email: string) {
-    return prisma.user.findUnique({ where: { email } });
+    return prisma.user.findUnique({
+      where: { email },
+      include: {
+        student: true,
+      },
+    });
   },
 
   update(id: string, data: UpdateUserInput) {
     return prisma.user.update({ where: { id }, data, select: safeUserSelect });
+  },
+
+  updateLoggedInAt(id: string, loggedInAt: Date = new Date()) {
+    return prisma.user.update({
+      where: { id },
+      data: { loggedInAt },
+      select: { id: true, loggedInAt: true },
+    });
   },
 
   delete(id: string) {

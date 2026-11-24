@@ -24,10 +24,31 @@ enum Role {
 
 model User {
   id           String    @id @default(uuid()) @db.VarChar(36)
-  name         String    @db.VarChar(100)
+  firstName    String    @db.VarChar(100)
+  middleName   String?   @db.VarChar(100)
+  surname      String    @db.VarChar(100)
   email        String    @unique @db.VarChar(254)
+  phone        String?   @db.VarChar(30)
   passwordHash String    @db.VarChar(255)
   role         Role      @default(STUDENT)
+  loggedInAt   DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+
+  student      Student?
+}
+
+model Student {
+  id             String    @id @default(uuid()) @db.VarChar(36)
+  userId         String    @unique @db.VarChar(36)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studentNumber  String?   @unique @db.VarChar(50)
+  gender         String?   @db.VarChar(20)
+  dateOfBirth    DateTime?
+  address        String?   @db.VarChar(255)
+  guardianName   String?   @db.VarChar(100)
+  guardianPhone  String?   @db.VarChar(30)
+  program        String?   @db.VarChar(100)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }

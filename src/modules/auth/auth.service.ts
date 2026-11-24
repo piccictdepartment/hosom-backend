@@ -12,8 +12,11 @@ export const authService = {
     }
     const passwordHash = await hashPassword(input.password);
     const user = await userRepository.create({
-      name: input.name,
+      firstName: input.firstName,
+      middleName: input.middleName,
+      surname: input.surname,
       email: input.email,
+      phone: input.phone,
       passwordHash,
       role: input.role,
     });
@@ -30,6 +33,12 @@ export const authService = {
     if (!valid) {
       throw new AppError(401, "INVALID_CREDENTIALS", "Email or password is incorrect");
     }
+
+    // Update loggedInAt timestamp
+    const now = new Date();
+    await userRepository.updateLoggedInAt(user.id, now);
+    user.loggedInAt = now;
+
     const { passwordHash: _, ...safeUser } = user;
     const token = await issueToken(user.id, user.role);
     return { user: safeUser, token };

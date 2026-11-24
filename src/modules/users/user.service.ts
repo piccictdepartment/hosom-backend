@@ -6,8 +6,11 @@ import type { ListUsersInput, UpdateUserInput } from "./user.types.js";
 import type { Role } from "../../generated/prisma/client.js";
 
 interface AdminCreateUserInput {
-  name: string;
+  firstName: string;
+  middleName?: string | null;
+  surname: string;
   email: string;
+  phone?: string | null;
   role?: Role;
 }
 
@@ -16,7 +19,6 @@ export const userService = {
     // Admin provisioning: generate a temporary random password
     const tempPassword = randomBytes(16).toString("hex");
     const passwordHash = await hashPassword(tempPassword);
-    // The database unique constraint also protects concurrent requests.
     return userRepository.create({ ...input, passwordHash });
   },
 

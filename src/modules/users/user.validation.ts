@@ -13,11 +13,16 @@ export const roleEnum = [
   "ADMIN",
 ] as const;
 
-const userBody = z.object({
-  name: z.string().trim().min(1).max(100),
-  email: z.string().trim().toLowerCase().pipe(z.email().max(254)),
-  role: z.enum(roleEnum).optional(),
-}).strict();
+const userBody = z
+  .object({
+    firstName: z.string().trim().min(1).max(100),
+    middleName: z.string().trim().max(100).optional().nullable(),
+    surname: z.string().trim().min(1).max(100),
+    email: z.string().trim().toLowerCase().pipe(z.email().max(254)),
+    phone: z.string().trim().max(30).optional().nullable(),
+    role: z.enum(roleEnum).optional(),
+  })
+  .strict();
 
 const userParams = z.object({ id: z.uuid() });
 
@@ -30,10 +35,20 @@ export const updateUserSchema = z.object({
   }),
 });
 export const listUsersSchema = z.object({
-  query: z.object({
-    page: z.string().regex(/^[1-9]\d*$/).transform(Number)
-      .pipe(z.number().int().max(1000000)).default(1),
-    limit: z.string().regex(/^[1-9]\d*$/).transform(Number)
-      .pipe(z.number().int().max(100)).default(20),
-  }).strict(),
+  query: z
+    .object({
+      page: z
+        .string()
+        .regex(/^[1-9]\d*$/)
+        .transform(Number)
+        .pipe(z.number().int().max(1000000))
+        .default(1),
+      limit: z
+        .string()
+        .regex(/^[1-9]\d*$/)
+        .transform(Number)
+        .pipe(z.number().int().max(100))
+        .default(20),
+    })
+    .strict(),
 });

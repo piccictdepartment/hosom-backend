@@ -17,7 +17,11 @@
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:clean": "tsx -e \"import { prisma } from './src/config/database.ts'; Promise.all([prisma.student.deleteMany(), prisma.user.deleteMany()]).then(() => { console.log('Database cleared.'); process.exit(0); });\"",
-    "db:sync": "prisma db push && prisma generate"
+    "db:sync": "prisma db push && prisma generate",
+    "db:seed": "tsx prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/adapter-mariadb": "7.10.0",

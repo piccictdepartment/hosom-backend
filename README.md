@@ -1,138 +1,243 @@
-# HOSOM backend
+# HOSOM Backend API
 
-Development guidance for database changes, seeders, deployment, and scaling is in [docs/database-development.md](docs/database-development.md).
+Modern, production-ready TypeScript backend built with **Express 5**, **Prisma ORM**, and **MySQL/MariaDB**, featuring stateless **JWT Authentication**, **Role-Based Access Control (RBAC)**, and a dedicated **Student Bio-Data Management System**.
 
-A TypeScript Express API with a basic user profile module and Prisma persistence in MySQL. The existing project layout is retained; only users and the shared API infrastructure are wired up. Other module files are placeholders for later work.
+---
 
-## Run locally
+## Table of Contents
+- [Prerequisites](#prerequisites)
+- [Quick Start Guide](#quick-start-guide)
+- [Database Management](#database-management)
+- [Roles & Access Control](#roles--access-control)
+- [Seeded Test Accounts](#seeded-test-accounts)
+- [API Overview](#api-overview)
+- [Project Architecture](#project-architecture)
 
-Run commands from this directory with Node.js 22.12 or newer:
+---
 
+## Prerequisites
+
+- **Node.js**: `>= 22.12.0`
+- **Database**: MySQL `>= 8.0` or MariaDB `>= 10.5`
+- **Package Manager**: npm
+
+---
+
+## Quick Start Guide
+
+### 1. Clone & Install Dependencies
 ```bash
+git clone <repository-url>
+cd hosom-backend
 npm install
+```
+
+### 2. Configure Environment Variables
+Copy `.env.example` to `.env` and update your database credentials:
+```bash
 cp .env.example .env
-docker compose up -d --wait mysql
-npm run db:deploy
-npm run db:generate
+```
+
+Ensure your `.env` contains your MySQL connection and JWT secret:
+```dotenv
+NODE_ENV=development
+HOST=0.0.0.0
+PORT=5000
+
+DATABASE_URL=mysql://your_user:your_password@127.0.0.1:3306/picc_hosom
+JWT_SECRET=your-32-character-secret-key-goes-here
+JWT_EXPIRES=7d
+
+CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+RATE_LIMIT_MAX=100
+RATE_LIMIT_WINDOW_MS=900000
+BODY_LIMIT=100kb
+TRUST_PROXY_HOPS=0
+```
+
+### 3. Synchronize Database Schema
+Push the Prisma schema to your MySQL database:
+```bash
+npm run db:sync
+```
+
+### 4. Seed Initial Data (Optional, but Recommended)
+Populate test accounts for all roles and sample students:
+```bash
+npm run db:seed
+```
+
+### 5. Start Development Server
+```bash
 npm run dev
 ```
+The server will start at `http://localhost:5000`.
 
-The API listens at `http://localhost:3000`. Docker Compose provides a local MySQL server and creates the `hosom` database and account. If you already have MySQL, skip the Docker command, create a database and user, and set `DATABASE_URL` in `.env`:
+---
 
-```dotenv
-DATABASE_URL=mysql://hosom:hosom_local_password@127.0.0.1:3306/hosom
-```
+## Database Management
 
-Replace the example credentials with your own and percent-encode special characters in the username or password. The runtime and Prisma commands use this same connection URL. Prisma uses the MySQL provider with its `@prisma/adapter-mariadb` driver adapter, which supports MySQL servers. The Compose credentials are local development defaults; set `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`, and `MYSQL_PORT` as needed and keep `DATABASE_URL` consistent with them.
+We provide convenient scripts in `package.json` to manage the database during development:
 
-```bash
-npm run typecheck
-npm test
-npm run build
-npm start
-```
+| Command | Description |
+| :--- | :--- |
+| **`npm run db:sync`** | Pushes schema changes directly to MySQL (`prisma db push`) and regenerates TypeScript client types. **Use this when modifying `schema.prisma`.** |
+| **`npm run db:seed`** | Executes [prisma/seed.ts](prisma/seed.ts) to populate all 10 role accounts and students with full bio-data. |
+| **`npm run db:clean`** | Completely wipes all records from `User` and `Student` tables. |
+| **`npm run db:studio`** | Launches **Prisma Studio** at `http://localhost:5555` to view, filter, and edit records in a web UI spreadsheet. |
+| **`npm run db:generate`** | Regenerates Prisma TypeScript client types without modifying the database. |
 
-Integration tests use a dedicated MySQL database specified by `TEST_DATABASE_URL`. Before running `npm test`, provision `hosom_test` and grant the test account access. For the default Docker setup, open `docker compose exec mysql mysql -uroot -p` (the default local root password is `hosom_root_local_password`) and run:
+---
 
-```sql
-CREATE DATABASE hosom_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-GRANT ALL PRIVILEGES ON hosom_test.* TO 'hosom'@'%';
-```
+## Roles & Access Control
 
-```dotenv
-TEST_DATABASE_URL=mysql://hosom:hosom_local_password@127.0.0.1:3306/hosom_test
-```
+The system implements Role-Based Access Control (RBAC) via the `authorize(...)` middleware.
 
-Tests apply the MySQL migration, exercise HTTP requests and Prisma queries, and delete test users between tests and on completion. They require a database name ending in `_test` and reject the configured application database. Never use a database containing application data for these tests.
+### Supported Roles
 
-After schema changes, run `npm run db:migrate -- --name describe_change`, then `npm run db:generate`. `db:migrate` needs a development account permitted to create a shadow database. Commit migrations; use `npm run db:deploy` to apply them in deployed environments. Builds generate the client and compile TypeScript; migrations are a separate step.
+| Role Key | Description |
+| :--- | :--- |
+| `SYSTEM_ADMINISTRATOR` | Full technical control over the system and user records. |
+| `ADMINISTRATION` | Institutional administration staff with user management permissions. |
+| `DIRECTOR_CHANCELLOR` | Executive leadership role. |
+| `HEAD_OF_PROGRAMS` | Academic leadership overseeing academic programs and student rosters. |
+| `FINANCE` | Financial management and fee administration staff. |
+| `SECRETARIAT` | Administrative office staff managing records and communications. |
+| `LECTURER` | Academic instructors and faculty members. |
+| `ICT_MEDIA` | Technical media, content, and IT support staff. |
+| `STUDENT` | Standard enrolled student accounts linked to bio-data records. |
+| `ADMIN` | Backward-compatible administrator alias. |
 
-The initial migration is now MySQL SQL for a fresh database. Any earlier local SQLite database files are retained but are no longer used; this change does not copy their data to MySQL.
+---
 
-## Request flow and structure
+## Seeded Test Accounts
+
+When running `npm run db:seed`, the database is populated with these test users:
+
+> **Universal Password for ALL Seeded Accounts:** `Password123!`
+
+### Staff Accounts
+
+| Role | Name | Email |
+| :--- | :--- | :--- |
+| `SYSTEM_ADMINISTRATOR` | Alex Mercer | `sysadmin@hosom.edu` |
+| `ADMINISTRATION` | Sarah Connor | `administration@hosom.edu` |
+| `DIRECTOR_CHANCELLOR` | Charles Xavier | `chancellor@hosom.edu` |
+| `HEAD_OF_PROGRAMS` | Albus Dumbledore | `headofprograms@hosom.edu` |
+| `FINANCE` | Gordon Gekko | `finance@hosom.edu` |
+| `SECRETARIAT` | Donna Paulsen | `secretariat@hosom.edu` |
+| `LECTURER` | Walter White | `lecturer1@hosom.edu` |
+| `LECTURER` | Minerva McGonagall | `lecturer2@hosom.edu` |
+| `ICT_MEDIA` | Elliot Alderson | `ict@hosom.edu` |
+| `ADMIN` | Bruce Wayne | `admin@hosom.edu` |
+
+### Student Accounts (With Bio-Data Profile)
+
+| Student Number | Name | Email | Program |
+| :--- | :--- | :--- | :--- |
+| `STU-2026-001` | Peter Parker | `peter.parker@student.hosom.edu` | B.Sc. Computer Science & Software Eng. |
+| `STU-2026-002` | Hermione Granger | `hermione.granger@student.hosom.edu` | B.Sc. Data Science & Applied Math |
+| `STU-2026-003` | Miles Morales | `miles.morales@student.hosom.edu` | Diploma in Multimedia & Animation Design |
+| `STU-2026-004` | Clark Kent | `clark.kent@student.hosom.edu` | B.A. Mass Communication & Journalism |
+| `STU-2026-005` | Diana Prince | `diana.prince@student.hosom.edu` | B.A. International Relations & Diplomacy |
+
+---
+
+## API Overview
+
+All API responses use a standardized JSON envelope:
+- **Success (`200` / `201`):** `{ "success": true, "data": ... }`
+- **Error (`4xx` / `5xx`):** `{ "success": false, "error": { "code": "...", "message": "..." }, "requestId": "..." }`
+
+### 1. System Endpoints
+| Method | Endpoint | Access | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/health` | Public | Service uptime and status check. |
+| `GET` | `/ready` | Public | Database connectivity check (`200` or `503`). |
+
+### 2. Auth Endpoints (`/api/auth`)
+| Method | Endpoint | Access | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/auth/roles` | Public | Returns list of all available system roles for dropdowns. |
+| `POST` | `/api/auth/register` | Public | Register staff/user with `{ firstName, surname, email, password, role? }`. |
+| `POST` | `/api/auth/register/student`| Public | Register student with user credentials + bio-data profile. |
+| `POST` | `/api/auth/login` | Public | Authenticates credentials, returns JWT token, updates `loggedInAt`. |
+| `GET` | `/api/auth/me` | Bearer Token | Returns authenticated user's profile and session. |
+| `POST` | `/api/auth/logout` | Bearer Token | Stateless logout (`204 No Content`). |
+| `POST` | `/api/auth/forgot-password`| Public | Initiates password reset link workflow. |
+| `POST` | `/api/auth/reset-password` | Public | Resets password using verification token. |
+
+### 3. Student Endpoints (`/api/students`)
+| Method | Endpoint | Access | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/students/register` | Public | Student registration with bio-data (`dateOfBirth`, `address`, `guardianName`, `guardianPhone`, `program`). |
+| `GET` | `/api/students/me` | Student Token | Returns currently logged-in student's bio-data profile. |
+| `GET` | `/api/students` | Admin / Staff | Paginated list of all students with user profiles (`?page=1&limit=20`). |
+| `GET` | `/api/students/:id` | Staff / Lecturer| Get student details and bio-data by ID. |
+| `PATCH`| `/api/students/:id` | Admin / Staff | Update student bio-data. |
+| `DELETE`| `/api/students/:id`| SysAdmin | Delete student record and cascading user account. |
+
+### 4. User Endpoints (`/api/users`)
+*Restricted to `SYSTEM_ADMINISTRATOR`, `ADMINISTRATION`, and `ADMIN`*
+| Method | Endpoint | Access | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/users` | Admin Token | Paginated list of users (`?page=1&limit=20`). |
+| `POST` | `/api/users` | Admin Token | Provision a new user with temporary password and designated role. |
+| `GET` | `/api/users/:id` | Admin Token | Get user profile by UUID. |
+| `PATCH`| `/api/users/:id` | Admin Token | Update user fields (`firstName`, `middleName`, `surname`, `email`, `phone`, `role`). |
+| `DELETE`| `/api/users/:id` | Admin Token | Delete user record. |
+
+---
+
+## Project Architecture
+
+The backend follows a clean, layered architectural structure:
 
 ```text
-Request → Route → Validation → Controller → Service → Repository → Prisma → MySQL
-                               ↓
-                         JSON response
-Errors → centralized error handler → JSON error response
-
 src/
-  app.ts                    Express configuration and middleware registration
-  server.ts                 Startup, database connection and graceful shutdown
-  config/                   Validated environment, CORS and shared Prisma client
-  routes/index.ts           Mounts feature routers under /api
-  middleware/               Validation, errors, request logging and rate limiting
-  core/errors/AppError.ts   Expected application errors
-  core/responses/           Shared success response helper
-  modules/users/
-    user.routes.ts          HTTP methods, paths and validation middleware
-    user.validation.ts      Body, ID and pagination schemas
-    user.controller.ts      HTTP input/output only
-    user.service.ts         User operations and application rules
-    user.repository.ts      Database queries only
-    user.types.ts           Inputs shared by service and repository
-  generated/prisma/         Generated client; do not edit or commit
+├── app.ts                    # Express app setup (Helmet, CORS, Rate-limiting, Logging)
+├── server.ts                 # HTTP server lifecycle and graceful shutdown
+├── config/
+│   ├── env.ts                # Validated Zod environment configuration
+│   ├── cors.ts               # Dynamic CORS origin validator
+│   └── database.ts           # Shared Prisma database client instance
+├── core/
+│   ├── security/
+│   │   ├── jwt.ts            # Stateless JWT signing and verification (HS256 via jose)
+│   │   └── password.ts       # Bcrypt password hashing and comparison
+│   ├── errors/               # Centralized AppError class and error codes
+│   └── responses/            # Standardized ApiResponse helper
+├── middleware/
+│   ├── authenticate.ts       # Extracts and verifies Bearer JWT token
+│   ├── authorize.ts          # RBAC role enforcement guard
+│   ├── validate.ts           # Zod request schema validation middleware
+│   ├── rateLimiter.ts        # IP rate limiting
+│   └── errorHandler.ts       # Centralized error handler with strict JSON formatting
+├── modules/
+│   ├── auth/                 # Identity & authentication (login, registration, tokens)
+│   ├── students/             # Student entity & bio-data profile management
+│   └── users/                # User accounts & administrative management
+├── routes/
+│   └── index.ts              # Mounts /api/auth, /api/students, /api/users
 prisma/
-  schema.prisma             User model
-  migrations/               Initial user table and unique email index
-tests/integration/          HTTP and database integration tests
+│   ├── schema.prisma         # Database models (User, Student, Role enum)
+│   └── seed.ts               # Database seeder script
 ```
 
-To add a module, follow the users layout, register its router in `src/routes/index.ts`, and add its model and migration when needed. Express request/response objects stay in controllers and middleware. All Prisma queries live in repositories, apart from shared startup/readiness checks.
+---
 
-## User endpoints
+## Testing & Quality
 
-The API contract is also available in [docs/openapi.yaml](docs/openapi.yaml).
-
-| Method | Path | Result |
-| --- | --- | --- |
-| POST | `/api/users` | Create a user; 201 with Location header |
-| GET | `/api/users?page=1&limit=20` | List users with pagination; 200 |
-| GET | `/api/users/:id` | Get a user; 200 |
-| PATCH | `/api/users/:id` | Update name and/or email; 200 |
-| DELETE | `/api/users/:id` | Delete a user; 204 with no body |
-| GET | `/health` | Process liveness; 200 |
-| GET | `/ready` | Database and user table readiness; 200 or 503 |
-
-```bash
-curl -i http://localhost:3000/api/users \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"Alice","email":"alice@example.com"}'
-
-curl 'http://localhost:3000/api/users?page=1&limit=20'
-curl http://localhost:3000/api/users/USER_ID
-curl -X PATCH http://localhost:3000/api/users/USER_ID \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"Alice Smith"}'
-curl -i -X DELETE http://localhost:3000/api/users/USER_ID
-```
-
-Replace `USER_ID` with the returned UUID. A user has `id`, `name`, `email`, `createdAt`, and `updatedAt`. Names are trimmed; emails are trimmed and lowercased before persistence. Unknown body fields, invalid UUIDs, blank names, invalid emails, and empty patches return 400. List pagination defaults to page 1 and limit 20; limit is capped at 100 and page at 1,000,000. Missing users return 404 and duplicate emails return 409, including concurrent writes.
-
-Success responses use `{ "success": true, "data": ... }`. Lists also include `meta.pagination` with `page`, `limit`, `total`, and `totalPages`. Errors use:
-
-```json
-{
-  "success": false,
-  "error": { "code": "USER_NOT_FOUND", "message": "User not found" },
-  "requestId": "generated-request-id"
-}
-```
-
-Validation errors also include `error.details` with field names and messages. Unexpected errors are logged server-side and return a generic 500 response.
-
-## API configuration
-
-- Environment validation fails startup with useful field errors.
-- Helmet sets security headers; Express identification is disabled.
-- CORS permits the exact origins in `CORS_ORIGINS` (comma separated). Requests without an Origin header, such as curl, are accepted. CORS is not authentication.
-- JSON and URL-encoded bodies are limited to `BODY_LIMIT` (default 100 KB). Malformed JSON returns 400, unsupported encodings 415, and oversized bodies 413.
-- `/api` requests are limited per client IP (default 100 per 15 minutes), with standard rate-limit headers and JSON 429 errors. The default store is in memory; use a shared store for multiple application instances.
-- Each request receives `X-Request-Id`; logs record method, path, status, and duration without bodies or query strings.
-- `TRUST_PROXY_HOPS` defaults to 0. Set it to match your deployment's actual trusted proxy chain so client-IP rate limiting stays correct.
-- Startup checks the migrated user table. SIGINT/SIGTERM stop accepting requests, drain ongoing requests, and disconnect Prisma, with a 10-second shutdown deadline.
-
-This module manages public user profiles. Authentication, passwords, and role-based access are not implemented; the existing auth and other domain files remain placeholders. Add authentication and authorization before exposing user administration to untrusted clients.
-
-Implementation references: [Express security guidance](https://expressjs.com/en/advanced/best-practice-security/) and [Prisma MySQL setup](https://www.prisma.io/docs/v7/prisma-orm/quickstart/mysql).
+- **Typecheck:** Verify complete TypeScript build:
+  ```bash
+  npm run typecheck
+  ```
+- **Integration Tests:**
+  ```bash
+  npm test
+  ```
+- **Build for Production:**
+  ```bash
+  npm run build
+  npm start
+  ```

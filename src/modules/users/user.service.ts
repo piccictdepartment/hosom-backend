@@ -1,11 +1,25 @@
+import { randomBytes } from "node:crypto";
 import { AppError } from "../../core/errors/AppError.js";
+import { hashPassword } from "../../core/security/password.js";
 import { userRepository } from "./user.repository.js";
-import type { CreateUserInput, ListUsersInput, UpdateUserInput } from "./user.types.js";
+import type { ListUsersInput, UpdateUserInput } from "./user.types.js";
+import type { Role } from "../../generated/prisma/client.js";
+
+interface AdminCreateUserInput {
+  firstName: string;
+  middleName?: string | null;
+  surname: string;
+  email: string;
+  phone?: string | null;
+  role?: Role;
+}
 
 export const userService = {
-  create(input: CreateUserInput) {
-    // The database unique constraint also protects concurrent requests.
-    return userRepository.create(input);
+  async create(input: AdminCreateUserInput) {
+    // Admin provisioning: generate a temporary random password
+    const tempPassword = randomBytes(16).toString("hex");
+    const passwordHash = await hashPassword(tempPassword);
+    return userRepository.create({ ...input, passwordHash });
   },
 
   async list(input: ListUsersInput) {

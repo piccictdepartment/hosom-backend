@@ -11,14 +11,15 @@
     "build": "prisma generate && tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "test": "prisma generate && tsx --test tests/integration/users.test.ts",
+    "test": "prisma generate && node scripts/sync-test-db.mjs && tsx --test tests/integration/flonicah.modules.test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:clean": "tsx -e \"import { prisma } from './src/config/database.ts'; Promise.all([prisma.student.deleteMany(), prisma.user.deleteMany()]).then(() => { console.log('Database cleared.'); process.exit(0); });\"",
     "db:sync": "prisma db push && prisma generate",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "db:test:sync": "node scripts/sync-test-db.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -44,5 +45,10 @@
     "supertest": "^7.1.0",
     "tsx": "^4.20.0",
     "typescript": "~5.9.0"
+  },
+  "allowScripts": {
+    "@prisma/engines": true,
+    "esbuild": true,
+    "prisma": true
   }
 }

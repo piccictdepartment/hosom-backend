@@ -3,10 +3,12 @@ import type { z } from "zod";
 import { sendSuccess } from "../../core/responses/ApiResponse.js";
 import { authService } from "./auth.service.js";
 import type {
+  changePasswordSchema,
   forgotPasswordSchema,
   loginSchema,
   registerSchema,
   resetPasswordSchema,
+  sessionParamSchema,
 } from "./auth.validation.js";
 
 const getRoles: RequestHandler = (_req, res) => {
@@ -17,26 +19,50 @@ const getRoles: RequestHandler = (_req, res) => {
     { value: "ADMINISTRATION", label: "Administration" },
     { value: "FINANCE", label: "Finance" },
     { value: "HEAD_OF_PROGRAMS", label: "Head of Programs" },
-    { value: "DIRECTOR_CHANCELLOR", label: "Director / Chancellor" },
-    { value: "ICT_MEDIA", label: "ICT / Media" },
-    { value: "SYSTEM_ADMINISTRATOR", label: "System Administrator" },
+    { value: "HEAD_OF_HOSOM", label: "Head of HOSOM" },
+    { value: "DIRECTOR", label: "Director / Chancellor" },
+    { value: "MEDIA", label: "ICT / Media" },
+    { value: "SYSTEM_ADMIN", label: "System Administrator" },
   ]);
 };
 
-const register: RequestHandler = async (_req, res) => {
+const register: RequestHandler = async (req, res) => {
   const { body } = res.locals.validated as z.infer<typeof registerSchema>;
-  const { user, token } = await authService.register(body);
+  const { user, token, sessionId, expiresAt } = await authService.register(body, {
+    userAgent: req.get("user-agent") ?? null,
+    ipAddress: req.ip ?? null,
+  });
   res.location(`/api/users/${user.id}`);
-  sendSuccess(res, { user, token }, 201);
+  sendSuccess(res, { user, token, sessionId, expiresAt }, 201);
 };
 
-const login: RequestHandler = async (_req, res) => {
+const login: RequestHandler = async (req, res) => {
   const { body } = res.locals.validated as z.infer<typeof loginSchema>;
-  const { user, token } = await authService.login(body);
-  sendSuccess(res, { user, token });
+  const { user, token, sessionId, expiresAt } = await authService.login(body, {
+    userAgent: req.get("user-agent") ?? null,
+    ipAddress: req.ip ?? null,
+  });
+  sendSuccess(res, { user, token, sessionId, expiresAt });
 };
 
-const logout: RequestHandler = async (_req, res) => {
+const logout: RequestHandler = async (req, res) => {
+  await authService.logout(req.user!.id, req.user!.sessionId);
+  res.status(204).end();
+};
+
+const logoutAll: RequestHandler = async (req, res) => {
+  await authService.logoutAll(req.user!.id);
+  res.status(204).end();
+};
+
+const listSessions: RequestHandler = async (req, res) => {
+  const sessions = await authService.listSessions(req.user!.id);
+  sendSuccess(res, sessions);
+};
+
+const revokeSession: RequestHandler = async (req, res) => {
+  const { params } = res.locals.validated as z.infer<typeof sessionParamSchema>;
+  await authService.revokeSession(req.user!.id, params.sessionId);
   res.status(204).end();
 };
 
@@ -45,17 +71,22 @@ const me: RequestHandler = async (req, res) => {
   sendSuccess(res, user);
 };
 
+const changePassword: RequestHandler = async (req, res) => {
+  const { body } = res.locals.validated as z.infer<typeof changePasswordSchema>;
+  await authService.changePassword(req.user!.id, body, req.user!.sessionId);
+  sendSuccess(res, { message: "Password updated successfully." });
+};
+
 const forgotPassword: RequestHandler = async (_req, res) => {
-  // body is validated; in production send reset email here
-  const _body = res.locals.validated as z.infer<typeof forgotPasswordSchema>;
-  // Always respond 200 to avoid user enumeration
-  sendSuccess(res, { message: "If that email is registered, a reset link has been sent." });
+  const { body } = res.locals.validated as z.infer<typeof forgotPasswordSchema>;
+  const result = await authService.forgotPassword(body.email);
+  sendSuccess(res, result);
 };
 
 const resetPassword: RequestHandler = async (_req, res) => {
-  const _body = res.locals.validated as z.infer<typeof resetPasswordSchema>;
-  // TODO: implement token-based password reset
-  sendSuccess(res, { message: "Password has been reset." });
+  const { body } = res.locals.validated as z.infer<typeof resetPasswordSchema>;
+  const result = await authService.resetPassword(body);
+  sendSuccess(res, result);
 };
 
 export const authController = {
@@ -63,7 +94,11 @@ export const authController = {
   register,
   login,
   logout,
+  logoutAll,
+  listSessions,
+  revokeSession,
   me,
+  changePassword,
   forgotPassword,
   resetPassword,
 };

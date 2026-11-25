@@ -1,5 +1,6 @@
 import { prisma } from "../../config/database.js";
-import type { CreateStudentInput, UpdateStudentInput } from "./student.types.js";
+import type { Prisma } from "../../generated/prisma/client.js";
+import type { ListStudentsQuery } from "./student.types.js";
 
 const userSelect = {
   id: true,
@@ -9,50 +10,78 @@ const userSelect = {
   email: true,
   phone: true,
   role: true,
+  isActive: true,
+  loggedInAt: true,
   createdAt: true,
   updatedAt: true,
 } as const;
 
-export const studentRepository = {
-  create(data: CreateStudentInput) {
-    return prisma.student.create({
-      data,
-      include: {
-        user: { select: userSelect },
+const studentInclude = {
+  user: { select: userSelect },
+  enrollments: {
+    select: {
+      id: true,
+      status: true,
+      enrolledAt: true,
+      course: {
+        select: {
+          id: true,
+          code: true,
+          title: true,
+          credits: true,
+        },
       },
-    });
+    },
   },
+} as const;
 
+export const studentRepository = {
   findByUserId(userId: string) {
     return prisma.student.findUnique({
       where: { userId },
-      include: {
-        user: { select: userSelect },
-      },
+      include: studentInclude,
     });
   },
 
   findById(id: string) {
     return prisma.student.findUnique({
       where: { id },
-      include: {
-        user: { select: userSelect },
-      },
+      include: studentInclude,
     });
   },
 
   findByStudentNumber(studentNumber: string) {
     return prisma.student.findUnique({
       where: { studentNumber },
-      include: {
-        user: { select: userSelect },
-      },
+      include: studentInclude,
     });
   },
 
-  async findMany({ page = 1, limit = 20 }: { page?: number; limit?: number }) {
+  async findMany({ page = 1, limit = 20, search, status, program }: ListStudentsQuery) {
+    const where: Prisma.StudentWhereInput = {};
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (program) {
+      where.program = { contains: program };
+    }
+
+    if (search) {
+      where.OR = [
+        { studentNumber: { contains: search } },
+        { program: { contains: search } },
+        { user: { firstName: { contains: search } } },
+        { user: { middleName: { contains: search } } },
+        { user: { surname: { contains: search } } },
+        { user: { email: { contains: search } } },
+      ];
+    }
+
     const [students, total] = await prisma.$transaction([
       prisma.student.findMany({
+        where,
         skip: (page - 1) * limit,
         take: limit,
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -60,28 +89,26 @@ export const studentRepository = {
           user: { select: userSelect },
         },
       }),
-      prisma.student.count(),
+      prisma.student.count({ where }),
     ]);
+
     return { students, total };
   },
 
-  update(id: string, data: UpdateStudentInput) {
+  updateStudentAndUser(
+    id: string,
+    studentData: Prisma.StudentUpdateInput,
+    userData?: Prisma.UserUpdateInput,
+  ) {
     return prisma.student.update({
       where: { id },
-      data,
-      include: {
-        user: { select: userSelect },
+      data: {
+        ...studentData,
+        ...(userData && Object.keys(userData).length > 0
+          ? { user: { update: userData } }
+          : {}),
       },
-    });
-  },
-
-  updateByUserId(userId: string, data: UpdateStudentInput) {
-    return prisma.student.update({
-      where: { userId },
-      data,
-      include: {
-        user: { select: userSelect },
-      },
+      include: studentInclude,
     });
   },
 

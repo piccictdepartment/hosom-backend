@@ -10,6 +10,7 @@ export const safeUserSelect = {
   email: true,
   phone: true,
   role: true,
+  isActive: true,
   loggedInAt: true,
   createdAt: true,
   updatedAt: true,
@@ -17,14 +18,57 @@ export const safeUserSelect = {
     select: {
       id: true,
       studentNumber: true,
+      status: true,
       gender: true,
       dateOfBirth: true,
+      nationality: true,
       address: true,
+      district: true,
       guardianName: true,
       guardianPhone: true,
       program: true,
+      intake: true,
+      yearOfStudy: true,
+      modeOfLearning: true,
       createdAt: true,
       updatedAt: true,
+      enrollments: {
+        where: { status: "ACTIVE" as const },
+        select: {
+          id: true,
+          status: true,
+          enrolledAt: true,
+          course: {
+            select: {
+              id: true,
+              code: true,
+              title: true,
+              description: true,
+              credits: true,
+              status: true,
+            },
+          },
+        },
+      },
+    },
+  },
+  taughtCourses: {
+    select: {
+      id: true,
+      isPrimary: true,
+      course: {
+        select: {
+          id: true,
+          code: true,
+          title: true,
+          description: true,
+          credits: true,
+          status: true,
+          _count: {
+            select: { enrollments: true },
+          },
+        },
+      },
     },
   },
 } as const;
@@ -58,8 +102,9 @@ export const userRepository = {
   findByEmailWithCredentials(email: string) {
     return prisma.user.findUnique({
       where: { email },
-      include: {
-        student: true,
+      select: {
+        ...safeUserSelect,
+        passwordHash: true,
       },
     });
   },

@@ -17,13 +17,19 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, req, res, next
   if (error instanceof AppError) {
     failure = error;
   } else if (error instanceof z.ZodError) {
-    failure = new AppError(400, "VALIDATION_ERROR", "Invalid request data",
-      error.issues.map((issue) => ({ field: issue.path.join("."), message: issue.message })));
+    failure = new AppError(
+      400,
+      "VALIDATION_ERROR",
+      "Invalid request data",
+      error.issues.map((issue) => ({ field: issue.path.join("."), message: issue.message })),
+    );
   } else if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === "P2002") {
-      failure = new AppError(409, "CONFLICT", "A user with this email already exists");
+      failure = new AppError(409, "CONFLICT", "A record with this unique value already exists");
     } else if (error.code === "P2025") {
-      failure = new AppError(404, "USER_NOT_FOUND", "User not found");
+      failure = new AppError(404, "NOT_FOUND", "Requested record was not found");
+    } else if (error.code === "P2003") {
+      failure = new AppError(400, "INVALID_REFERENCE", "Referenced record does not exist");
     }
   } else if (typeof error === "object" && error !== null && "type" in error) {
     if (error.type === "entity.parse.failed") {

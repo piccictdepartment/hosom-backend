@@ -4,10 +4,13 @@ import { authorize } from "../../middleware/authorize.js";
 import { validate } from "../../middleware/validate.js";
 import { studentController } from "./student.controller.js";
 import {
+  createStudentSchema,
   getStudentSchema,
   listStudentsSchema,
   registerStudentSchema,
+  updateOwnStudentProfileSchema,
   updateStudentSchema,
+  updateStudentStatusSchema,
 } from "./student.validation.js";
 
 export const studentRouter = Router();
@@ -16,41 +19,64 @@ export const studentRouter = Router();
 studentRouter.post(
   "/register",
   validate(registerStudentSchema),
-  studentController.register
+  studentController.register,
 );
 
-// Authenticated: Get currently logged in student profile
+// Authenticated student: View & update own profile
 studentRouter.get("/me", authenticate, studentController.getMe);
+studentRouter.patch(
+  "/me",
+  authenticate,
+  authorize("STUDENT"),
+  validate(updateOwnStudentProfileSchema),
+  studentController.updateMe,
+);
 
-// Administrative: View, manage, update students
+// Administrative: Create, view, search, update students
+studentRouter.post(
+  "/",
+  authenticate,
+  authorize("SYSTEM_ADMIN", "ADMINISTRATION", "SECRETARIAT"),
+  validate(createStudentSchema),
+  studentController.create,
+);
+
 studentRouter.get(
   "/",
   authenticate,
-  authorize("SYSTEM_ADMINISTRATOR", "ADMINISTRATION", "SECRETARIAT", "HEAD_OF_PROGRAMS", "ADMIN"),
+  authorize("SYSTEM_ADMIN", "ADMINISTRATION", "SECRETARIAT", "HEAD_OF_PROGRAMS", "FINANCE", "DIRECTOR"),
   validate(listStudentsSchema),
-  studentController.list
+  studentController.list,
 );
 
 studentRouter.get(
   "/:id",
   authenticate,
-  authorize("SYSTEM_ADMINISTRATOR", "ADMINISTRATION", "SECRETARIAT", "HEAD_OF_PROGRAMS", "LECTURER", "ADMIN"),
+  authorize("SYSTEM_ADMIN", "ADMINISTRATION", "SECRETARIAT", "HEAD_OF_PROGRAMS", "LECTURER", "FINANCE", "DIRECTOR"),
   validate(getStudentSchema),
-  studentController.getById
+  studentController.getById,
 );
 
 studentRouter.patch(
   "/:id",
   authenticate,
-  authorize("SYSTEM_ADMINISTRATOR", "ADMINISTRATION", "SECRETARIAT", "ADMIN"),
+  authorize("SYSTEM_ADMIN", "ADMINISTRATION", "SECRETARIAT"),
   validate(updateStudentSchema),
-  studentController.update
+  studentController.update,
+);
+
+studentRouter.patch(
+  "/:id/status",
+  authenticate,
+  authorize("SYSTEM_ADMIN", "ADMINISTRATION", "SECRETARIAT", "HEAD_OF_PROGRAMS"),
+  validate(updateStudentStatusSchema),
+  studentController.updateStatus,
 );
 
 studentRouter.delete(
   "/:id",
   authenticate,
-  authorize("SYSTEM_ADMINISTRATOR", "ADMIN"),
+  authorize("SYSTEM_ADMIN"),
   validate(getStudentSchema),
-  studentController.delete
+  studentController.delete,
 );

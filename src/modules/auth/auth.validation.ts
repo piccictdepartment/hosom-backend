@@ -36,8 +36,27 @@ export const forgotPasswordSchema = z.object({
 export const resetPasswordSchema = z.object({
   body: z
     .object({
-      token: z.string().min(1),
+      token: z.string().trim().min(1),
       password: passwordField,
     })
     .strict(),
+});
+
+export const changePasswordSchema = z.object({
+  body: z
+    .object({
+      currentPassword: z.string().min(1),
+      newPassword: passwordField,
+    })
+    .strict()
+    .refine((data) => data.currentPassword !== data.newPassword, {
+      message: "New password must be different from current password",
+      path: ["newPassword"],
+    }),
+});
+
+export const sessionParamSchema = z.object({
+  params: z.object({
+    sessionId: z.uuid(),
+  }),
 });

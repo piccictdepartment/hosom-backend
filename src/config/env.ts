@@ -5,7 +5,7 @@ import { parseDatabaseUrl } from "./databaseUrl.js";
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   HOST: z.string().min(1).default("0.0.0.0"),
-  PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   DATABASE_URL: z.string().refine((value) => {
     try {
       parseDatabaseUrl(value);
@@ -23,6 +23,7 @@ const schema = z.object({
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
   JWT_EXPIRES: z.string().default("7d"),
+  SESSION_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(30 * 60 * 1000),
 });
 
 const result = schema.safeParse(process.env);

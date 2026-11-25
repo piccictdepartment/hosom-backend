@@ -1,0 +1,1 @@
+Get-Content prisma\migrations\20261124093151_init\migration.sql

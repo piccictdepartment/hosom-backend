@@ -41,11 +41,15 @@ export const userService = {
     return user;
   },
 
-  update(id: string, input: UpdateUserInput) {
+  async update(id: string, input: UpdateUserInput) {
+    const existing = await userRepository.findById(id);
+    if (!existing) throw new AppError(404, "USER_NOT_FOUND", "User not found");
     return userRepository.update(id, input);
   },
 
   async delete(id: string) {
+    const existing = await userRepository.findById(id);
+    if (!existing) throw new AppError(404, "USER_NOT_FOUND", "User not found");
     await userRepository.delete(id);
   },
 };

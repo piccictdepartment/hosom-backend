@@ -1,13 +1,38 @@
-# API architecture
+# HOSOM HELMS API architecture — Phase 1
 
-The implemented feature is `src/modules/users`. Other feature directories are reserved placeholders.
+The backend is a modular Express 5 / TypeScript API using Prisma 7 and MySQL. The Phase 1 feature modules include authentication, users, students, programmes, courses, enrolments, learning materials, assignments and submissions.
 
-Persistence uses MySQL through Prisma's MySQL provider and MariaDB driver adapter. Both the Prisma CLI and application use `DATABASE_URL`. `compose.yaml` provides an optional local MySQL server. Integration tests require a separate MySQL database configured with `TEST_DATABASE_URL`.
+## Request flow
 
-Requests pass through shared logging, security headers, CORS, rate limiting and body parsing. `src/routes/index.ts` mounts feature routers under `/api`. User routes validate their inputs before invoking controllers.
+`HTTP request → request logger / security headers / CORS / rate limiter → body parser → API router → authentication → role authorization → Zod validation → controller → service → Prisma/MySQL → standardized JSON response`
 
-Controllers read validated HTTP input and format responses. Services perform application operations and missing-user checks. Repositories own Prisma queries, including the transaction used to return a user list and its total count. The database's unique email constraint remains the final authority for conflicting creates and updates.
+- `src/app.ts` configures middleware and exports the Express app without opening a network port.
+- `src/server.ts` connects to MySQL, checks readiness, starts the listener on `HOST:PORT`, and handles graceful shutdown.
+- `src/routes/index.ts` mounts the Phase 1 feature routers under `/api`.
+- `src/middleware/` contains JWT/session authentication, role authorization, request validation, request logging, rate limiting and centralized error handling.
+- `src/modules/` contains feature-specific validation, route, controller and service code. Student, material and assignment features also use repositories for Prisma query organization.
+- `src/core/` contains shared errors, response formatting, JWT/password utilities and Express request types.
+- `prisma/schema.prisma` defines the MySQL relational model; generated Prisma client code is under `src/generated/prisma` and is regenerated during build.
 
-Validation data is stored in `res.locals.validated`; middleware does not overwrite Express request getters. Express forwards rejected async handlers to the centralized error handler, which maps expected application, validation, database and parser errors to consistent JSON responses.
+## Security boundaries
 
-`app.ts` exports the application without binding a port, so integration tests can exercise the same middleware and routes. `server.ts` owns database readiness, HTTP startup, timeouts and signal handling. Prisma migrations are applied separately before startup.
+JWTs identify a persisted `UserSession`; logout and logout-all revoke session records. `SESSION_IDLE_TIMEOUT_MS` controls the default inactivity timeout. `authorize(...)` applies role-based route restrictions. Domain services enforce record scope, including lecturer-to-course assignment and student-to-course enrolment checks. Zod validates request bodies, route parameters and query strings before controller operations.
+
+Public staff registration is disabled. `POST /api/auth/register` requires `SYSTEM_ADMIN` or `ADMINISTRATION`; public applicants use `POST /api/students/register` and receive a `PENDING` student record.
+
+## Persistence and environments
+
+The application and Prisma CLI read `DATABASE_URL`. Automated integration tests require a separate `TEST_DATABASE_URL` whose database name ends in `_test`; tests refuse to run against the application database. Demo seeding clears sample tables and is only for a disposable local database.
+
+The supplied migration directory currently contains the initial users-table migration only, while the Prisma schema includes the wider Phase 1 model set. `npm run db:sync` is provided for local disposable development databases. Before production, generate and review a complete migration history from the current schema on the Windows development environment and verify it against a fresh test database.
+
+## Error and response contract
+
+Success responses use `{ success: true, data, meta? }`. Errors use `{ success: false, error: { code, message, details? }, requestId }`. Express 5 forwards rejected async route handlers to the centralized error handler. Validation results are stored in `res.locals.validated` rather than replacing Express request properties.
+
+## Known architecture gaps
+
+- Binary upload/object storage is not connected; learning material endpoints currently persist metadata, text, URLs and storage keys.
+- Fine-grained database-backed permissions and a complete audit-log subsystem are not implemented in this phase.
+- Password reset tokens are generated and validated, but production email delivery is not configured.
+- Dashboard aggregate endpoints and several SRS modules (finance, results, exams, notifications, reports, admissions applications and attendance) remain outside the implemented Phase 1 API.

@@ -1,16 +1,17 @@
 import { z } from "zod";
 
-export const roleEnum = [
+export const roleEnum = 
+[
   "STUDENT",
   "LECTURER",
   "SECRETARIAT",
-  "ADMINISTRATION",
   "FINANCE",
+  "ADMINISTRATION",
   "HEAD_OF_PROGRAMS",
-  "DIRECTOR_CHANCELLOR",
-  "ICT_MEDIA",
-  "SYSTEM_ADMINISTRATOR",
-  "ADMIN",
+  "HEAD_OF_HOSOM",
+  "DIRECTOR",
+  "MEDIA",
+  "SYSTEM_ADMIN",
 ] as const;
 
 const userBody = z

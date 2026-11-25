@@ -1,66 +1,38 @@
-# Database and deployment development notes
+# HOSOM HELMS API architecture — Phase 1
 
-This backend uses Express, Prisma 7, and MySQL. `src/modules/users` is the only implemented feature; the other module directories are placeholders.
+The backend is a modular Express 5 / TypeScript API using Prisma 7 and MySQL. The Phase 1 feature modules include authentication, users, students, programmes, courses, enrolments, learning materials, assignments and submissions.
 
-## Local database workflow
+## Request flow
 
-1. Set `DATABASE_URL` in `.env` to a local MySQL database. Keep `.env` out of Git.
-2. Apply committed migrations with `npm run db:deploy` and generate the client with `npm run db:generate`.
-3. After editing `prisma/schema.prisma`, create a migration with `npm run db:migrate -- --name describe_change`. Review and commit its SQL.
-4. Run `npm run typecheck` and the relevant integration tests before deployment.
+`HTTP request → request logger / security headers / CORS / rate limiter → body parser → API router → authentication → role authorization → Zod validation → controller → service → Prisma/MySQL → standardized JSON response`
 
-Use a separate `TEST_DATABASE_URL` whose database name ends in `_test`. The integration tests reject the application database and delete test users. Never point them at data you need to retain.
+- `src/app.ts` configures middleware and exports the Express app without opening a network port.
+- `src/server.ts` connects to MySQL, checks readiness, starts the listener on `HOST:PORT`, and handles graceful shutdown.
+- `src/routes/index.ts` mounts the Phase 1 feature routers under `/api`.
+- `src/middleware/` contains JWT/session authentication, role authorization, request validation, request logging, rate limiting and centralized error handling.
+- `src/modules/` contains feature-specific validation, route, controller and service code. Student, material and assignment features also use repositories for Prisma query organization.
+- `src/core/` contains shared errors, response formatting, JWT/password utilities and Express request types.
+- `prisma/schema.prisma` defines the MySQL relational model; generated Prisma client code is under `src/generated/prisma` and is regenerated during build.
 
-## Seeders
+## Security boundaries
 
-Keep three kinds of seed data separate:
+JWTs identify a persisted `UserSession`; logout and logout-all revoke session records. `SESSION_IDLE_TIMEOUT_MS` controls the default inactivity timeout. `authorize(...)` applies role-based route restrictions. Domain services enforce record scope, including lecturer-to-course assignment and student-to-course enrolment checks. Zod validates request bodies, route parameters and query strings before controller operations.
 
-| Kind | Examples | Environment |
-| --- | --- | --- |
-| Reference | Roles, statuses, program types | Development, staging, production |
-| Demo | Sample users and courses | Development only |
-| Test fixtures | Minimal records for one test | Dedicated test database only |
+Public staff registration is disabled. `POST /api/auth/register` requires `SYSTEM_ADMIN` or `ADMINISTRATION`; public applicants use `POST /api/students/register` and receive a `PENDING` student record.
 
-Make seeders safe to rerun. Use a stable unique field with `upsert`, and seed parent records before dependent records. Do not put real personal data, shared passwords, or secrets in seed files. Production reference seeds should be an explicit deployment step; demo seeds should refuse to run in production.
+## Persistence and environments
 
-To enable Prisma 7's seed command, add `seed: "tsx prisma/seed.ts"` inside the `migrations` object in `prisma.config.ts`, and add `"db:seed": "prisma db seed"` to `package.json` scripts. Prisma 7 runs this only when `npm run db:seed` is invoked. An example for the current `User` model:
+The application and Prisma CLI read `DATABASE_URL`. Automated integration tests require a separate `TEST_DATABASE_URL` whose database name ends in `_test`; tests refuse to run against the application database. Demo seeding clears sample tables and is only for a disposable local database.
 
-```ts
-import { prisma } from "../src/config/database.js";
+The supplied migration directory currently contains the initial users-table migration only, while the Prisma schema includes the wider Phase 1 model set. `npm run db:sync` is provided for local disposable development databases. Before production, generate and review a complete migration history from the current schema on the Windows development environment and verify it against a fresh test database.
 
-async function main() {
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("Demo seeds must not run in production");
-  }
+## Error and response contract
 
-  await prisma.user.upsert({
-    where: { email: "demo@example.test" },
-    update: { name: "Demo User" },
-    create: { name: "Demo User", email: "demo@example.test" },
-  });
-}
+Success responses use `{ success: true, data, meta? }`. Errors use `{ success: false, error: { code, message, details? }, requestId }`. Express 5 forwards rejected async route handlers to the centralized error handler. Validation results are stored in `res.locals.validated` rather than replacing Express request properties.
 
-try {
-  await main();
-} finally {
-  await prisma.$disconnect();
-}
-```
+## Known architecture gaps
 
-As models are added, split seed logic into `prisma/seeds/reference.ts` and `prisma/seeds/demo.ts`, with `prisma/seed.ts` selecting which to run. Verify the target `DATABASE_URL` before any seed command.
-
-## Adding a feature
-
-Follow the users module: Prisma model and migration, request validation, repository, service, controller, routes, then integration tests. Register the router in `src/routes/index.ts`. Add authorization before exposing student, payment, or academic records. For changes to populated tables, add new fields first, deploy compatible code, backfill data, and remove old fields in a later release.
-
-## Deployment
-
-Use separate database credentials for development, tests, staging, and production. Store production credentials in the deployment platform's secrets facility. A release should run `npm ci`, `npm run typecheck`, `npm run build`, and `npm run db:deploy`, then start with `npm start`. Run migrations once per release, before starting new API instances. Check `/health` and `/ready` after deployment.
-
-Set `NODE_ENV=production`, configure `CORS_ORIGINS`, serve the API through HTTPS and a reverse proxy, and use a process supervisor that restarts it after failures. Schedule database backups and periodically verify a restore. `src/jobs/backup.job.ts` is currently a placeholder, not a backup system.
-
-## Scaling
-
-Measure query latency, request latency, errors, and database connections before increasing capacity. Add indexes based on real filters and joins, use pagination for growing collections, and keep API instances stateless. Multiple instances need a load balancer and a shared store for any cross-instance state. Move emails, reminders, and other long-running work to a queue with dedicated workers. Account for each instance's database connection pool when setting MySQL connection limits.
-
-References: [Prisma 7 seeding](https://www.prisma.io/docs/orm/v7/prisma-migrate/workflows/seeding), [Prisma migration deployment](https://docs.prisma.io/docs/cli/v7/migrate/deploy), [Prisma connection pools](https://docs.prisma.io/docs/orm/v7/prisma-client/setup-and-configuration/databases-connections/connection-pool), [Express production guidance](https://expressjs.com/en/advanced/best-practice-performance/).
+- Binary upload/object storage is not connected; learning material endpoints currently persist metadata, text, URLs and storage keys.
+- Fine-grained database-backed permissions and a complete audit-log subsystem are not implemented in this phase.
+- Password reset tokens are generated and validated, but production email delivery is not configured.
+- Dashboard aggregate endpoints and several SRS modules (finance, results, exams, notifications, reports, admissions applications and attendance) remain outside the implemented Phase 1 API.

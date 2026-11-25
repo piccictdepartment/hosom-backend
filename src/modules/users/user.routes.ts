@@ -8,7 +8,7 @@ import { createUserSchema, getUserSchema, listUsersSchema, updateUserSchema } fr
 export const userRouter = Router();
 
 // All user management routes require authentication + administrative role
-userRouter.use(authenticate, authorize("SYSTEM_ADMINISTRATOR", "ADMINISTRATION", "ADMIN"));
+userRouter.use(authenticate, authorize("SYSTEM_ADMIN", "ADMINISTRATION"));
 
 userRouter.post("/", validate(createUserSchema), userController.create);
 userRouter.get("/", validate(listUsersSchema), userController.list);
